@@ -19,6 +19,8 @@ public class HttpResponse<T> {
     public static HttpResponse Ok = new HttpResponse(ResponseCode.Ok);
     public static HttpResponse Bad = new HttpResponse(ResponseCode.BadRequest);
     public static HttpResponse NotFound = new HttpResponse(ResponseCode.NotFound);
+    public static HttpResponse InternalServerError = new HttpResponse(ResponseCode.InternalServerError);
+    public static HttpResponse SpiderNotFound = new HttpResponse(ResponseCode.SpiderNotFound);
 
     public HttpResponse() {
     }
@@ -27,7 +29,6 @@ public class HttpResponse<T> {
         this.code = code.getCode();
         this.message = message;
     }
-
 
     public HttpResponse(int code, String message) {
         this.code = code;

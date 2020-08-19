@@ -38,7 +38,7 @@ findProject(':pipeline:couchbase')?.name = 'couchbase'
 include 'pipeline:elasticsearch'
 findProject(':pipeline:elasticsearch')?.name = 'elasticsearch'
 include 'pipeline:redis'
-findProject(':pipeline:redis')?.name = 'redis'
+findProject(':pipeline:redis')?.name = 'pipeline-redis'
 include 'pipeline:mongo'
 findProject(':pipeline:mongo')?.name = 'mongo'
 
@@ -47,6 +47,6 @@ include 'kotlin:dsl'
 findProject(':kotlin:dsl')?.name = 'dsl'
 include 'kotlin:coroutines'
 findProject(':kotlin:coroutines')?.name = 'coroutines'
-include 'kotlin:rpc'
-findProject(':kotlin:rpc')?.name = 'rpc'
+
+include 'imageprocess'
 

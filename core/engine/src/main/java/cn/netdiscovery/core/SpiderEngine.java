@@ -1,7 +1,6 @@
 package cn.netdiscovery.core;
 
-import cn.netdiscovery.core.config.Configuration;
-import cn.netdiscovery.core.config.Constant;
+import cn.netdiscovery.core.config.SpiderEngineConfig;
 import cn.netdiscovery.core.domain.Request;
 import cn.netdiscovery.core.domain.bean.SpiderJobBean;
 import cn.netdiscovery.core.quartz.ProxyPoolJob;
@@ -9,10 +8,9 @@ import cn.netdiscovery.core.quartz.QuartzManager;
 import cn.netdiscovery.core.quartz.SpiderJob;
 import cn.netdiscovery.core.queue.Queue;
 import cn.netdiscovery.core.registry.Registry;
-import cn.netdiscovery.core.utils.BooleanUtils;
-import cn.netdiscovery.core.utils.NumberUtils;
 import cn.netdiscovery.core.utils.UserAgent;
-import cn.netdiscovery.core.vertx.VertxUtils;
+import cn.netdiscovery.core.vertx.RegisterConsumer;
+import cn.netdiscovery.core.vertx.VertxManager;
 import com.cv4j.proxy.ProxyManager;
 import com.cv4j.proxy.ProxyPool;
 import com.cv4j.proxy.domain.Proxy;
@@ -23,6 +21,7 @@ import io.reactivex.functions.Action;
 import io.reactivex.functions.Consumer;
 import io.reactivex.functions.Function;
 import io.reactivex.schedulers.Schedulers;
+import io.vertx.core.Verticle;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.http.HttpServer;
 import io.vertx.ext.web.Router;
@@ -42,14 +41,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
-import static cn.netdiscovery.core.config.Constant.JOB_GROUP_NAME;
-import static cn.netdiscovery.core.config.Constant.PROXY_POOL_JOB_NAME;
-import static cn.netdiscovery.core.config.Constant.SPIDER_JOB_NAME;
-import static cn.netdiscovery.core.config.Constant.TRIGGER_GROUP_NAME;
-import static cn.netdiscovery.core.config.Constant.TRIGGER_NAME;
+import static cn.netdiscovery.core.config.Constant.*;
+import static com.cv4j.proxy.config.Constant.setUas;
 
 /**
- * 可以管理多个 Spider 的容器
+ * 可以管理多个 Spider 的引擎(容器)
  * Created by tony on 2018/1/2.
  */
 @Slf4j
@@ -70,8 +66,10 @@ public class SpiderEngine {
 
     private AtomicInteger count = new AtomicInteger(0);
 
+    @Getter
     private Map<String, Spider> spiders = new ConcurrentHashMap<>();
 
+    @Getter
     private Map<String, SpiderJobBean> jobs = new ConcurrentHashMap<>();
 
     private SpiderEngine() {
@@ -82,7 +80,6 @@ public class SpiderEngine {
     private SpiderEngine(Queue queue) {
 
         this.queue = queue;
-
         initSpiderEngine();
     }
 
@@ -90,8 +87,7 @@ public class SpiderEngine {
      * 初始化爬虫引擎，加载ua列表
      */
     private void initSpiderEngine() {
-
-        String[] uaList = Constant.uaList;
+        String[] uaList = uaFiles;
 
         if (Preconditions.isNotBlank(uaList)) {
 
@@ -107,7 +103,6 @@ public class SpiderEngine {
                             if (Preconditions.isNotBlank(inputString)) {
                                 String[] ss = inputString.split("\r\n");
                                 if (ss.length > 0) {
-
                                     Arrays.asList(ss).forEach(ua -> UserAgent.uas.add(ua));
                                 }
                             }
@@ -118,18 +113,13 @@ public class SpiderEngine {
                         }
                     });
 
-            com.cv4j.proxy.config.Constant.setUas(UserAgent.uas); // 让代理池也能够共享ua
+            setUas(UserAgent.uas); // 让代理池也能够共享ua
         }
 
-        try {
-            defaultHttpdPort = NumberUtils.toInt(Configuration.getConfig("spiderEngine.config.port"));
-            useMonitor = BooleanUtils.toBoolean(Configuration.getConfig("spiderEngine.config.useMonitor"));
-        } catch (ClassCastException e) {
-            defaultHttpdPort = 8715;
-            useMonitor = false;
-        }
+        defaultHttpdPort = SpiderEngineConfig.getInstance().getPort();
+        useMonitor = SpiderEngineConfig.getInstance().isUseMonitor();
 
-        VertxUtils.configVertx(new VertxOptions().setMetricsOptions(
+        VertxManager.configVertx(new VertxOptions().setMetricsOptions(
                 new MicrometerMetricsOptions()
                         .setPrometheusOptions(new VertxPrometheusOptions().setEnabled(true))
                         .setEnabled(true)));
@@ -198,8 +188,9 @@ public class SpiderEngine {
 
     /**
      * 对各个爬虫的状态进行监测，并返回json格式。
-     * 如果要使用此方法，须放在run()之前
-     * 采用默认的端口号
+     * 如果要使用此方法，须放在run()之前。采用默认的端口号
+     * httpd() 必须要使用
+     * 
      * @return
      */
     public SpiderEngine httpd() {
@@ -216,9 +207,9 @@ public class SpiderEngine {
     public SpiderEngine httpd(int port) {
 
         defaultHttpdPort = port;
-        server = VertxUtils.getVertx().createHttpServer();
+        server = VertxManager.getVertx().createHttpServer();
 
-        Router router = Router.router(VertxUtils.getVertx());
+        Router router = Router.router(VertxManager.getVertx());
         router.route().handler(BodyHandler.create());
 
         RouterHandler routerHandler = new RouterHandler(spiders,jobs,router,useMonitor);
@@ -246,7 +237,6 @@ public class SpiderEngine {
     public void closeHttpServer() {
 
         if (server != null) {
-
             server.close();
         }
     }
@@ -256,24 +246,22 @@ public class SpiderEngine {
      *
      */
     public void run() {
-
         log.info("\r\n" +
                 "   _   _      _   ____  _\n" +
                 "  | \\ | | ___| |_|  _ \\(_)___  ___ _____   _____ _ __ _   _\n" +
                 "  |  \\| |/ _ \\ __| | | | / __|/ __/ _ \\ \\ / / _ \\ '__| | | |\n" +
                 "  | |\\  |  __/ |_| |_| | \\__ \\ (_| (_) \\ V /  __/ |  | |_| |\n" +
                 "  |_| \\_|\\___|\\__|____/|_|___/\\___\\___/ \\_/ \\___|_|   \\__, |\n" +
-                "                                                      |___/");
+                "                                                      |___/\n"+
+                "  NetDiscovery is running ...\n"+
+                "  Author: Tony Shen，Email: fengzhizi715@126.com");
 
         if (Preconditions.isNotBlank(spiders)) {
-
             if (registry!=null && registry.getProvider()!=null) {
-
                 registry.register(registry.getProvider(), defaultHttpdPort);
             }
 
             if (registerConsumer!=null) {
-
                 registerConsumer.process();
             }
 
@@ -320,7 +308,6 @@ public class SpiderEngine {
      * @param name
      */
     public Spider getSpider(String name) {
-
         return spiders.get(name);
     }
 
@@ -334,7 +321,6 @@ public class SpiderEngine {
         Spider spider = spiders.get(name);
 
         if (spider != null) {
-
             spider.stop();
         }
     }
@@ -345,7 +331,6 @@ public class SpiderEngine {
     public void stopSpiders() {
 
         if (Preconditions.isNotBlank(spiders)) {
-
             spiders.forEach((s, spider) -> spider.stop());
         }
     }
@@ -418,7 +403,6 @@ public class SpiderEngine {
     public void addProxyPoolJob(Map<String, Class> proxyMap, String cron) {
 
         String jobName = PROXY_POOL_JOB_NAME + count.incrementAndGet();
-
         QuartzManager.addJob(jobName, JOB_GROUP_NAME, TRIGGER_NAME, TRIGGER_GROUP_NAME, ProxyPoolJob.class, cron, proxyMap);
     }
 
@@ -428,7 +412,6 @@ public class SpiderEngine {
     public void startProxyPool(Map<String, Class> proxyMap) {
 
         if (Preconditions.isNotBlank(proxyMap)) {
-
             ProxyPool.proxyMap = proxyMap;
             ProxyManager proxyManager = ProxyManager.get();
             proxyManager.start();
@@ -436,11 +419,10 @@ public class SpiderEngine {
     }
 
     /**
-     * 注册 Vert.x eventBus 的消费者
+     * 部署 Vert.x 的 Verticle，便于爬虫引擎的扩展
+     * @param verticle
      */
-    @FunctionalInterface
-    public interface RegisterConsumer {
-
-        void process();
+    public void deployVerticle(Verticle verticle) {
+        VertxManager.deployVerticle(verticle);
     }
 }

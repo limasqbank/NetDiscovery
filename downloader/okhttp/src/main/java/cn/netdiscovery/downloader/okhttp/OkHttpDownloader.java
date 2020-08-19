@@ -6,7 +6,7 @@ import cn.netdiscovery.core.domain.HttpRequestBody;
 import cn.netdiscovery.core.domain.Request;
 import cn.netdiscovery.core.domain.Response;
 import cn.netdiscovery.core.downloader.Downloader;
-import cn.netdiscovery.core.transformer.DownloaderDelayTransformer;
+import cn.netdiscovery.core.rxjava.transformer.DownloaderDelayTransformer;
 import com.cv4j.proxy.domain.Proxy;
 import com.safframework.rxcache.domain.Record;
 import com.safframework.tony.common.utils.Preconditions;
@@ -43,10 +43,10 @@ public class OkHttpDownloader implements Downloader{
 
         // request 在 debug 模式下，并且缓存中包含了数据，则使用缓存中的数据
         if (request.isDebug()
-                && RxCacheManager.getInsatance().getRxCache()!=null
-                && RxCacheManager.getInsatance().getRxCache().get(request.getUrl(),Response.class)!=null) {
+                && RxCacheManager.getInstance().getRxCache()!=null
+                && RxCacheManager.getInstance().getRxCache().get(request.getUrl(),Response.class)!=null) {
 
-            Record<Response> response = RxCacheManager.getInsatance().getRxCache().get(request.getUrl(),Response.class);
+            Record<Response> response = RxCacheManager.getInstance().getRxCache().get(request.getUrl(),Response.class);
             return Maybe.just(response.getData());
         }
 

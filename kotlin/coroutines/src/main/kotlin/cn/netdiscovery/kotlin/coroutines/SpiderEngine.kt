@@ -1,17 +1,16 @@
 package cn.netdiscovery.kotlin.coroutines
 
-import cn.netdiscovery.core.config.Configuration
 import cn.netdiscovery.core.config.Constant
 import cn.netdiscovery.core.config.Constant.*
+import cn.netdiscovery.core.config.SpiderEngineConfig
 import cn.netdiscovery.core.domain.bean.SpiderJobBean
 import cn.netdiscovery.core.quartz.ProxyPoolJob
 import cn.netdiscovery.core.quartz.QuartzManager
 import cn.netdiscovery.core.queue.Queue
 import cn.netdiscovery.core.registry.Registry
-import cn.netdiscovery.core.utils.BooleanUtils
-import cn.netdiscovery.core.utils.NumberUtils
 import cn.netdiscovery.core.utils.UserAgent
-import cn.netdiscovery.core.vertx.VertxUtils
+import cn.netdiscovery.core.vertx.RegisterConsumer
+import cn.netdiscovery.core.vertx.VertxManager
 import com.cv4j.proxy.ProxyManager
 import com.cv4j.proxy.ProxyPool
 import com.cv4j.proxy.domain.Proxy
@@ -19,13 +18,13 @@ import com.safframework.tony.common.utils.IOUtils
 import com.safframework.tony.common.utils.Preconditions
 import io.reactivex.Flowable
 import io.reactivex.schedulers.Schedulers
+import io.vertx.core.Verticle
 import io.vertx.core.VertxOptions
 import io.vertx.core.http.HttpServer
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.handler.BodyHandler
 import io.vertx.micrometer.MicrometerMetricsOptions
 import io.vertx.micrometer.VertxPrometheusOptions
-import lombok.Getter
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.util.*
@@ -35,8 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * Created by tony on 2018/8/8.
  */
-class SpiderEngine private constructor(@field:Getter
-                                       val queue: Queue? = null) {
+class SpiderEngine private constructor(val queue: Queue? = null) {
 
     private var server: HttpServer? = null
 
@@ -64,7 +62,7 @@ class SpiderEngine private constructor(@field:Getter
      */
     private fun initSpiderEngine() {
 
-        val uaList = Constant.uaList
+        val uaList = Constant.uaFiles
 
         if (Preconditions.isNotBlank(uaList)) {
 
@@ -96,14 +94,14 @@ class SpiderEngine private constructor(@field:Getter
         }
 
         try {
-            defaultHttpdPort = NumberUtils.toInt(Configuration.getConfig("spiderEngine.config.port"))
-            useMonitor = BooleanUtils.toBoolean(Configuration.getConfig("spiderEngine.config.useMonitor"))
+            defaultHttpdPort = SpiderEngineConfig.getInstance().port
+            useMonitor = SpiderEngineConfig.getInstance().isUseMonitor
         } catch (e: ClassCastException) {
             defaultHttpdPort = 8715
             useMonitor = false
         }
 
-        VertxUtils.configVertx(VertxOptions().setMetricsOptions(
+        VertxManager.configVertx(VertxOptions().setMetricsOptions(
                 MicrometerMetricsOptions()
                         .setPrometheusOptions(VertxPrometheusOptions().setEnabled(true))
                         .setEnabled(true)))
@@ -175,9 +173,9 @@ class SpiderEngine private constructor(@field:Getter
 
         defaultHttpdPort = port
 
-        server = VertxUtils.getVertx().createHttpServer()?.apply {
+        server = VertxManager.getVertx().createHttpServer()?.apply {
 
-            val router = Router.router(VertxUtils.getVertx())
+            val router = Router.router(VertxManager.getVertx())
             router.route().handler(BodyHandler.create())
 
             val routerHandler = RouterHandler(spiders, jobs, router, useMonitor)
@@ -215,14 +213,15 @@ class SpiderEngine private constructor(@field:Getter
      *
      */
     fun run() {
-
         println("\r\n" +
                 "   _   _      _   ____  _\n" +
                 "  | \\ | | ___| |_|  _ \\(_)___  ___ _____   _____ _ __ _   _\n" +
                 "  |  \\| |/ _ \\ __| | | | / __|/ __/ _ \\ \\ / / _ \\ '__| | | |\n" +
                 "  | |\\  |  __/ |_| |_| | \\__ \\ (_| (_) \\ V /  __/ |  | |_| |\n" +
                 "  |_| \\_|\\___|\\__|____/|_|___/\\___\\___/ \\_/ \\___|_|   \\__, |\n" +
-                "                                                      |___/")
+                "                                                      |___/\n"+
+                "  NetDiscovery is running ...\n"+
+                "  Author: Tony Shen，Email: fengzhizi715@126.com");
 
         if (Preconditions.isNotBlank<Map<String, Spider>>(spiders)) {
 
@@ -278,7 +277,7 @@ class SpiderEngine private constructor(@field:Getter
 
         if (Preconditions.isNotBlank(spiders)) {
 
-            spiders.forEach { _, spider -> spider.stop() }
+            spiders.forEach { (_, spider) -> spider.stop() }
         }
     }
 
@@ -309,12 +308,11 @@ class SpiderEngine private constructor(@field:Getter
     }
 
     /**
-     * 注册 Vert.x eventBus 的消费者
+     * 部署 Vert.x 的 Verticle，便于爬虫引擎的扩展
+     * @param verticle
      */
-    @FunctionalInterface
-    interface RegisterConsumer {
-
-        fun process()
+    fun deployVerticle(verticle: Verticle) {
+        VertxManager.deployVerticle(verticle)
     }
 
     companion object {

@@ -25,6 +25,7 @@ dependencies {
     implementation project(":downloader:selenium")
     implementation "com.cv4j.proxy:proxypool:${libs.proxypool}"
     implementation "org.seleniumhq.selenium:selenium-java:${libs.selenium_java}"
+
     implementation "io.vertx:vertx-core:${libs.vertx}"
 }
 

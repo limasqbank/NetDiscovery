@@ -1,7 +1,6 @@
 package cn.netdiscovery.kotlin.coroutines
 
 import cn.netdiscovery.core.config.Constant.*
-import cn.netdiscovery.core.constants.ResponseCode
 import cn.netdiscovery.core.domain.bean.SpiderBean
 import cn.netdiscovery.core.domain.bean.SpiderJobBean
 import cn.netdiscovery.core.domain.response.JobsResponse
@@ -9,8 +8,8 @@ import cn.netdiscovery.core.domain.response.SpiderResponse
 import cn.netdiscovery.core.domain.response.SpiderStatusResponse
 import cn.netdiscovery.core.domain.response.SpidersResponse
 import cn.netdiscovery.core.utils.SerializableUtils
-import cn.netdiscovery.core.vertx.VertxUtils
-import cn.netdiscovery.kotlin.coroutines.ext.pushToRunninSpider
+import cn.netdiscovery.core.vertx.VertxManager
+import cn.netdiscovery.kotlin.coroutines.extension.pushToRunninSpider
 import com.safframework.tony.common.utils.Preconditions
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.client.WebClient
@@ -18,7 +17,7 @@ import io.vertx.ext.web.handler.StaticHandler
 import io.vertx.micrometer.PrometheusScrapingHandler
 import java.net.InetAddress
 import java.net.UnknownHostException
-import java.util.ArrayList
+import java.util.*
 
 /**
  * Created by tony on 2019-08-12.
@@ -28,7 +27,7 @@ class RouterHandler(private val spiders: Map<String, Spider>, private val jobs: 
     fun route() {
 
         // 检测 SpiderEngine 的健康状况
-        router.route("/netdiscovery/health/").handler { routingContext ->
+        router.route(ROUTER_HEALTH).handler { routingContext ->
 
             val response = routingContext.response()
             response.putHeader(CONTENT_TYPE, CONTENT_TYPE_JSON)
@@ -36,12 +35,12 @@ class RouterHandler(private val spiders: Map<String, Spider>, private val jobs: 
             response.end(SerializableUtils.toJson(cn.netdiscovery.core.domain.response.HttpResponse.Ok))
         }
 
-        router.route("/netdiscovery/metrics").handler(PrometheusScrapingHandler.create())
+        router.route(ROUTER_METRICS).handler(PrometheusScrapingHandler.create())
 
         if (Preconditions.isNotBlank(spiders)) {
 
             // 显示容器下所有爬虫的信息
-            router.route("/netdiscovery/spiders/").handler { routingContext ->
+            router.route(ROUTER_SPIDERS).handler { routingContext ->
 
                 val response = routingContext.response()
                 response.putHeader(CONTENT_TYPE, CONTENT_TYPE_JSON)
@@ -79,7 +78,7 @@ class RouterHandler(private val spiders: Map<String, Spider>, private val jobs: 
             }
 
             // 根据爬虫的名称获取爬虫的详情
-            router.route("/netdiscovery/spider/:spiderName/detail").handler { routingContext ->
+            router.route(ROUTER_SPIDER_DETAIL).handler { routingContext ->
 
                 val response = routingContext.response()
                 response.putHeader(CONTENT_TYPE, CONTENT_TYPE_JSON)
@@ -109,13 +108,12 @@ class RouterHandler(private val spiders: Map<String, Spider>, private val jobs: 
                     // 写入响应并结束处理
                     response.end(SerializableUtils.toJson(spiderResponse))
                 } else {
-
-                    response.end(SerializableUtils.toJson(cn.netdiscovery.core.domain.response.HttpResponse<ResponseCode>(ResponseCode.SpiderNotFound)))
+                    response.end(SerializableUtils.toJson(cn.netdiscovery.core.domain.response.HttpResponse.SpiderNotFound))
                 }
             }
 
             // 修改单个爬虫的状态
-            router.post("/netdiscovery/spider/:spiderName/status").handler { routingContext ->
+            router.post(ROUTER_SPIDER_STATUS).handler { routingContext ->
 
                 val response = routingContext.response()
                 response.putHeader(CONTENT_TYPE, CONTENT_TYPE_JSON)
@@ -151,9 +149,6 @@ class RouterHandler(private val spiders: Map<String, Spider>, private val jobs: 
                                 spider.forceStop()
                                 spiderStatusResponse.data = String.format("SpiderEngine stop Spider %s success", spider.name)
                             }
-
-                            else -> {
-                            }
                         }
                     }
 
@@ -165,14 +160,13 @@ class RouterHandler(private val spiders: Map<String, Spider>, private val jobs: 
                     // 写入响应并结束处理
                     response.end(SerializableUtils.toJson(spiderStatusResponse))
                 } else {
-
-                    response.end(SerializableUtils.toJson(cn.netdiscovery.core.domain.response.HttpResponse<ResponseCode>(ResponseCode.SpiderNotFound)))
+                    response.end(SerializableUtils.toJson(cn.netdiscovery.core.domain.response.HttpResponse.SpiderNotFound))
                 }
 
             }
 
             // 添加新的url任务到某个正在运行中的爬虫
-            router.post("/netdiscovery/spider/:spiderName/push").handler { routingContext ->
+            router.post(ROUTER_SPIDER_PUSH).handler { routingContext ->
 
                 val response = routingContext.response()
                 response.putHeader(CONTENT_TYPE, CONTENT_TYPE_JSON)
@@ -190,14 +184,13 @@ class RouterHandler(private val spiders: Map<String, Spider>, private val jobs: 
 
                     response.end(SerializableUtils.toJson(cn.netdiscovery.core.domain.response.HttpResponse("待抓取的url已经放入queue中")))
                 } else {
-
-                    response.end(SerializableUtils.toJson(cn.netdiscovery.core.domain.response.HttpResponse<ResponseCode>(ResponseCode.SpiderNotFound)))
+                    response.end(SerializableUtils.toJson(cn.netdiscovery.core.domain.response.HttpResponse.SpiderNotFound))
                 }
 
             }
 
             // 显示所有爬虫的定时任务
-            router.route("/netdiscovery/jobs/").handler { routingContext ->
+            router.route(ROUTER_JOBS).handler { routingContext ->
 
                 val response = routingContext.response()
                 response.putHeader(CONTENT_TYPE, CONTENT_TYPE_JSON)
@@ -222,7 +215,7 @@ class RouterHandler(private val spiders: Map<String, Spider>, private val jobs: 
                 router.route().handler(StaticHandler.create().setCachingEnabled(false))
 
                 // The proxy handler
-                val client = WebClient.create(VertxUtils.getVertx())
+                val client = WebClient.create(VertxManager.getVertx())
 
                 var localhost: InetAddress? = null
                 try {

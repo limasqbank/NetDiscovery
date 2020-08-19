@@ -31,9 +31,7 @@ dependencies {
     implementation "io.micrometer:micrometer-registry-prometheus:1.2.0"
 
     implementation "com.cv4j.proxy:proxypool:${libs.proxypool}"
-    implementation "ch.qos.logback:logback-classic:${libs.logback}"
-    implementation "ch.qos.logback:logback-core:${libs.logback}"
-    implementation "ch.qos.logback:logback-access:${libs.logback}"
+    implementation "tony-common:tony-common-utils:${libs.tony_common_utils}"
     implementation "org.projectlombok:lombok:${libs.lombok}"
 
     implementation "org.quartz-scheduler:quartz:${libs.quartz}"
@@ -42,6 +40,8 @@ dependencies {
     implementation 'org.apache.curator:curator-framework:2.13.0'
 
     implementation "io.etcd:jetcd-core:0.3.0"
+
+    implementation "com.github.bdqfork:hamal-context:0.1.1"
 
     implementation project(":core:core")
 }

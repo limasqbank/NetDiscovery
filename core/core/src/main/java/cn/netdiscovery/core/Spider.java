@@ -1,7 +1,7 @@
 package cn.netdiscovery.core;
 
-import cn.netdiscovery.core.config.Configuration;
 import cn.netdiscovery.core.config.Constant;
+import cn.netdiscovery.core.config.SpiderConfig;
 import cn.netdiscovery.core.domain.Page;
 import cn.netdiscovery.core.domain.Request;
 import cn.netdiscovery.core.domain.Response;
@@ -19,9 +19,8 @@ import cn.netdiscovery.core.pipeline.PrintRequestPipeline;
 import cn.netdiscovery.core.queue.DefaultQueue;
 import cn.netdiscovery.core.queue.Queue;
 import cn.netdiscovery.core.queue.disruptor.DisruptorQueue;
-import cn.netdiscovery.core.utils.BooleanUtils;
-import cn.netdiscovery.core.utils.NumberUtils;
-import cn.netdiscovery.core.utils.RetryWithDelay;
+import cn.netdiscovery.core.rxjava.RetryWithDelay;
+import cn.netdiscovery.core.rxjava.transformer.SpiderRunTransformer;
 import cn.netdiscovery.core.utils.SpiderUtils;
 import cn.netdiscovery.core.utils.Throttle;
 import com.cv4j.proxy.ProxyPool;
@@ -43,6 +42,7 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
@@ -63,7 +63,7 @@ public class Spider {
     public final static int SPIDER_STATUS_RESUME = 3;
     public final static int SPIDER_STATUS_STOPPED = 4;
 
-    protected AtomicInteger stat = new AtomicInteger(SPIDER_STATUS_INIT);
+    private AtomicInteger stat = new AtomicInteger(SPIDER_STATUS_INIT);
 
     @Getter
     private String name = "spider";// 爬虫的名字，默认使用spider
@@ -76,29 +76,17 @@ public class Spider {
     private Queue queue;
 
     private boolean autoProxy = false;
-
     private long initialDelay = 0;
-
     private int maxRetries = 3; // 重试次数
-
     private long retryDelayMillis = 1000; // 重试等待的时间
-
     private long sleepTime = 30000;  // 默认30s
-
     private long requestSleepTime = 0; // 默认0s
-
     private boolean autoSleepTime = false;
-
     private long downloadDelay = 0;  // 默认0s
-
     private boolean autoDownloadDelay = false;
-
     private long pipelineDelay = 0;  // 默认0s
-
     private boolean autoPipelineDelay = false;
-
     private long domainDelay = 0;  // 默认0s
-
     private boolean autoDomainDelay = false;
 
     private volatile boolean pause;
@@ -106,38 +94,30 @@ public class Spider {
     private ReentrantLock newRequestLock = new ReentrantLock();
     private Condition newRequestCondition = newRequestLock.newCondition();
 
+    private ExecutorService parseThreadPool;
+    private ExecutorService pipeLineThreadPool;
+
     private CompositeDisposable compositeDisposable = new CompositeDisposable();
 
     @Getter
     private Downloader downloader;
 
     private Spider() {
-
-        try {
-            String queueType = Configuration.getConfig("spider.queue.type");
-
-            if (Preconditions.isNotBlank(queueType)) {
-
-                switch (queueType) {
-
-                    case Constant.QUEUE_TYPE_DEFAULT:
-                        this.queue = new DefaultQueue();
-                        break;
-
-                    case Constant.QUEUE_TYPE_DISRUPTOR:
-                        this.queue = new DisruptorQueue();
-                        break;
-
-                    default:
-                        break;
-                }
+        String queueType = SpiderConfig.getInstance().getQueueType();
+        if (Preconditions.isNotBlank(queueType)) {
+            switch (queueType) {
+                case Constant.QUEUE_TYPE_DEFAULT:
+                    this.queue = new DefaultQueue();
+                    break;
+                case Constant.QUEUE_TYPE_DISRUPTOR:
+                    this.queue = new DisruptorQueue();
+                    break;
+                default:
+                    break;
             }
-        } catch (ClassCastException e) {
-            log.error(e.getMessage());
         }
 
         if (this.queue == null) {
-
             this.queue = new DefaultQueue();
         }
 
@@ -145,7 +125,6 @@ public class Spider {
     }
 
     private Spider(Queue queue) {
-
         if (queue != null) {
             this.queue = queue;
         } else {
@@ -156,80 +135,59 @@ public class Spider {
     }
 
     /**
-     * 从 application.yaml 或 application.properties 中获取配置，并依据这些配置来初始化爬虫
+     * 从 application.conf 中获取配置，并依据这些配置来初始化爬虫
      */
     private void initSpiderConfig() {
+        autoProxy = SpiderConfig.getInstance().isAutoProxy();
+        initialDelay = SpiderConfig.getInstance().getInitialDelay();
+        maxRetries = SpiderConfig.getInstance().getMaxRetries();
+        retryDelayMillis = SpiderConfig.getInstance().getRetryDelayMillis();
 
-        try {
-            autoProxy = BooleanUtils.toBoolean(Configuration.getConfig("spider.config.autoProxy"),false);
-            initialDelay = NumberUtils.toLong(Configuration.getConfig("spider.config.initialDelay"));
-            maxRetries = NumberUtils.toInt(Configuration.getConfig("spider.config.maxRetries"));
-            retryDelayMillis = NumberUtils.toLong(Configuration.getConfig("spider.config.maxRetries"));
+        requestSleepTime = SpiderConfig.getInstance().getSleepTime();
+        autoSleepTime = SpiderConfig.getInstance().isAutoSleepTime();
+        downloadDelay = SpiderConfig.getInstance().getDownloadDelay();
+        autoDownloadDelay = SpiderConfig.getInstance().isAutoDownloadDelay();
+        domainDelay = SpiderConfig.getInstance().getDomainDelay();
+        autoDomainDelay = SpiderConfig.getInstance().isAutoDomainDelay();
 
-            requestSleepTime = NumberUtils.toLong(Configuration.getConfig("spider.request.sleepTime"));
-            autoSleepTime = BooleanUtils.toBoolean(Configuration.getConfig("spider.request.autoSleepTime"),false);
-            downloadDelay = NumberUtils.toLong(Configuration.getConfig("spider.request.downloadDelay"));
-            autoDownloadDelay = BooleanUtils.toBoolean(Configuration.getConfig("spider.request.autoDownloadDelay"),false);
-            domainDelay = NumberUtils.toLong(Configuration.getConfig("spider.request.domainDelay"));
-            autoDomainDelay = BooleanUtils.toBoolean(Configuration.getConfig("spider.request.autoDomainDelay"),false);
+        pipelineDelay = SpiderConfig.getInstance().getPipelineDelay();
+        autoPipelineDelay = SpiderConfig.getInstance().isAutoPipelineDelay();
 
-            pipelineDelay = NumberUtils.toLong(Configuration.getConfig("spider.pipeline.pipelineDelay"));
-            autoPipelineDelay = BooleanUtils.toBoolean(Configuration.getConfig("spider.pipeline.autoPipelineDelay"),false);
+        String downloaderType = SpiderConfig.getInstance().getDownloaderType();
 
-            String downloaderType = Configuration.getConfig("spider.downloader.type");
-
-            if (Preconditions.isNotBlank(downloaderType)) {
-
-                switch (downloaderType) {
-
-                    case Constant.DOWNLOAD_TYPE_VERTX:
-                        this.downloader = new VertxDownloader();
-                        break;
-
-                    case Constant.DOWNLOAD_TYPE_URL_CONNECTION:
-                        this.downloader = new UrlConnectionDownloader();
-                        break;
-
-                    case Constant.DOWNLOAD_TYPE_FILE:
-                        this.downloader = new FileDownloader();
-                        break;
-
-                    default:
-                        break;
-                }
+        if (Preconditions.isNotBlank(downloaderType)) {
+            switch (downloaderType) {
+                case Constant.DOWNLOAD_TYPE_VERTX:
+                    this.downloader = new VertxDownloader();
+                    break;
+                case Constant.DOWNLOAD_TYPE_URL_CONNECTION:
+                    this.downloader = new UrlConnectionDownloader();
+                    break;
+                case Constant.DOWNLOAD_TYPE_FILE:
+                    this.downloader = new FileDownloader();
+                    break;
+                default:
+                    break;
             }
+        }
 
-            boolean usePrintRequestPipeline = BooleanUtils.toBoolean(Configuration.getConfig("spider.config.usePrintRequestPipeline"),true);
-
-            if (usePrintRequestPipeline) {
-                // 默认使用 PrintRequestPipeline
-                this.pipelines.add(new PrintRequestPipeline());
-            }
-
-            boolean useConsolePipeline = BooleanUtils.toBoolean(Configuration.getConfig("spider.config.useConsolePipeline"),true);
-
-            if (useConsolePipeline) {
-                // 默认使用 ConsolePipeline
-                this.pipelines.add(new ConsolePipeline());
-            }
-
-        } catch (ClassCastException e) {
-            log.error(e.getMessage());
+        if (SpiderConfig.getInstance().isUsePrintRequestPipeline()) {
+            this.pipelines.add(new PrintRequestPipeline()); // 默认使用 PrintRequestPipeline
+        }
+        if (SpiderConfig.getInstance().isUseConsolePipeline()) {
+            this.pipelines.add(new ConsolePipeline()); // 默认使用 ConsolePipeline
         }
     }
 
     public static Spider create() {
-
         return new Spider();
     }
 
     public static Spider create(Queue queue) {
-
         return queue != null ? new Spider(queue) : new Spider();
     }
 
     public Spider name(String name) {
-
         checkIfRunning();
 
         if (Preconditions.isNotBlank(name)) {
@@ -240,33 +198,13 @@ public class Spider {
     }
 
     public Spider url(Charset charset, String... urls) {
-
         checkIfRunning();
 
         if (Preconditions.isNotBlank(urls)) {
 
             Arrays.asList(urls)
                     .stream()
-                    .forEach(url -> {
-                        Request request = new Request(url, name);
-                        request.charset(charset.name());
-                        if (autoSleepTime) {
-                            request.autoSleepTime();
-                        } else {
-                            request.sleep(requestSleepTime);
-                        }
-                        if (autoDownloadDelay) {
-                            request.autoDownloadDelay();
-                        } else {
-                            request.downloadDelay(downloadDelay);
-                        }
-                        if (autoDomainDelay) {
-                            request.autoDomainDelay();
-                        } else {
-                            request.domainDelay(domainDelay);
-                        }
-                        queue.push(request);
-                    });
+                    .forEach(url -> pushToQueue(url,charset));
 
             signalNewRequest();
         }
@@ -275,32 +213,13 @@ public class Spider {
     }
 
     public Spider url(String... urls) {
-
         checkIfRunning();
 
         if (Preconditions.isNotBlank(urls)) {
 
             Arrays.asList(urls)
                     .stream()
-                    .forEach(url -> {
-                        Request request = new Request(url, name);
-                        if (autoSleepTime) {
-                            request.autoSleepTime();
-                        } else {
-                            request.sleep(requestSleepTime);
-                        }
-                        if (autoDownloadDelay) {
-                            request.autoDownloadDelay();
-                        } else {
-                            request.downloadDelay(downloadDelay);
-                        }
-                        if (autoDomainDelay) {
-                            request.autoDomainDelay();
-                        } else {
-                            request.domainDelay(domainDelay);
-                        }
-                        queue.push(request);
-                    });
+                    .forEach(url -> pushToQueue(url,null));
 
             signalNewRequest();
         }
@@ -309,31 +228,11 @@ public class Spider {
     }
 
     public Spider url(Charset charset, List<String> urls) {
-
         checkIfRunning();
 
         if (Preconditions.isNotBlank(urls)) {
 
-            urls.forEach(url -> {
-                Request request = new Request(url, name);
-                request.charset(charset.name());
-                if (autoSleepTime) {
-                    request.autoSleepTime();
-                } else {
-                    request.sleep(requestSleepTime);
-                }
-                if (autoDownloadDelay) {
-                    request.autoDownloadDelay();
-                } else {
-                    request.downloadDelay(downloadDelay);
-                }
-                if (autoDomainDelay) {
-                    request.autoDomainDelay();
-                } else {
-                    request.domainDelay(domainDelay);
-                }
-                queue.push(request);
-            });
+            urls.forEach(url -> pushToQueue(url,charset));
 
             signalNewRequest();
         }
@@ -342,30 +241,11 @@ public class Spider {
     }
 
     public Spider url(List<String> urls) {
-
         checkIfRunning();
 
         if (Preconditions.isNotBlank(urls)) {
 
-            urls.forEach(url -> {
-                Request request = new Request(url, name);
-                if (autoSleepTime) {
-                    request.autoSleepTime();
-                } else {
-                    request.sleep(requestSleepTime);
-                }
-                if (autoDownloadDelay) {
-                    request.autoDownloadDelay();
-                } else {
-                    request.downloadDelay(downloadDelay);
-                }
-                if (autoDomainDelay) {
-                    request.autoDomainDelay();
-                } else {
-                    request.domainDelay(domainDelay);
-                }
-                queue.push(request);
-            });
+            urls.forEach(url -> pushToQueue(url,null));
 
             signalNewRequest();
         }
@@ -373,8 +253,30 @@ public class Spider {
         return this;
     }
 
-    public Spider request(Request... requests) {
+    private void pushToQueue(String url,Charset charset) {
+        Request request = new Request(url, name);
+        if (charset!=null) {
+            request.charset(charset.name());
+        }
+        if (autoSleepTime) {
+            request.autoSleepTime();
+        } else {
+            request.sleep(requestSleepTime);
+        }
+        if (autoDownloadDelay) {
+            request.autoDownloadDelay();
+        } else {
+            request.downloadDelay(downloadDelay);
+        }
+        if (autoDomainDelay) {
+            request.autoDomainDelay();
+        } else {
+            request.domainDelay(domainDelay);
+        }
+        queue.push(request);
+    }
 
+    public Spider request(Request... requests) {
         checkIfRunning();
 
         if (Preconditions.isNotBlank(requests)) {
@@ -412,7 +314,6 @@ public class Spider {
      * @return
      */
     public Spider repeatRequest(long period, String url, String charset) {
-
         checkIfRunning();
 
         compositeDisposable
@@ -456,7 +357,6 @@ public class Spider {
      * @return
      */
     public Spider repeatRequest(long period, Request request) {
-
         checkIfRunning();
 
         if (request!=null) {
@@ -504,7 +404,6 @@ public class Spider {
     }
 
     public Spider initialDelay(long initialDelay) {
-
         checkIfRunning();
 
         if (initialDelay > 0) {
@@ -515,7 +414,6 @@ public class Spider {
     }
 
     public Spider maxRetries(int maxRetries) {
-
         checkIfRunning();
 
         if (maxRetries > 0) {
@@ -526,7 +424,6 @@ public class Spider {
     }
 
     public Spider retryDelayMillis(long retryDelayMillis) {
-
         checkIfRunning();
 
         if (retryDelayMillis > 0) {
@@ -548,7 +445,6 @@ public class Spider {
     }
 
     public Spider downloader(Downloader downloader) {
-
         checkIfRunning();
 
         if (downloader != null) {
@@ -559,7 +455,6 @@ public class Spider {
     }
 
     public Spider parser(Parser parser) {
-
         checkIfRunning();
 
         if (parser != null) {
@@ -570,7 +465,6 @@ public class Spider {
     }
 
     public Spider pipeline(Pipeline pipeline) {
-
         checkIfRunning();
 
         if (pipeline != null) {
@@ -589,7 +483,6 @@ public class Spider {
     }
 
     public Spider clearPipeline() {
-
         checkIfRunning();
         this.pipelines.clear();
         return this;
@@ -601,7 +494,6 @@ public class Spider {
      * @return
      */
     public Spider autoProxy() {
-
         return autoProxy(true);
     }
 
@@ -612,9 +504,18 @@ public class Spider {
      * @return
      */
     public Spider autoProxy(boolean autoProxy) {
-
         checkIfRunning();
         this.autoProxy = autoProxy;
+        return this;
+    }
+
+    public Spider parseThreadPool(ExecutorService parseThreadPool) {
+        this.parseThreadPool = parseThreadPool;
+        return this;
+    }
+
+    public Spider pipeLineThreadPool(ExecutorService pipeLineThreadPool) {
+        this.pipeLineThreadPool = pipeLineThreadPool;
         return this;
     }
 
@@ -641,13 +542,11 @@ public class Spider {
     }
 
     public void run() {
-
         checkRunningStat();
 
         initialDelay();
 
         if (downloader == null) { // 如果downloader为空，则使用默认的VertxDownloader
-
             downloader = new VertxDownloader();
         }
 
@@ -670,12 +569,9 @@ public class Spider {
             final Request request = queue.poll(name);
 
             if (request == null) {
-
                 waitNewRequest();
             } else {
-
                 if (request.getSleepTime() > 0) {
-
                     try {
                         Thread.sleep(request.getSleepTime());
                     } catch (InterruptedException e) {
@@ -697,7 +593,6 @@ public class Spider {
 
                 // request请求之前的处理
                 if (request.getBeforeRequest() != null) {
-
                     request.getBeforeRequest().process(request);
                 }
 
@@ -731,10 +626,10 @@ public class Spider {
                                     page.putField(Constant.RESPONSE_RAW, response.getIs()); // 默认情况，保存InputStream
                                 }
 
-
                                 return page;
                             }
                         })
+                        .compose(new SpiderRunTransformer(parseThreadPool))
                         .map(new Function<Page, Page>() {
 
                             @Override
@@ -748,6 +643,7 @@ public class Spider {
                                 return page;
                             }
                         })
+                        .compose(new SpiderRunTransformer(pipeLineThreadPool))
                         .map(new Function<Page, Page>() {
 
                             @Override
@@ -799,21 +695,17 @@ public class Spider {
     }
 
     private void checkIfRunning() {
-
         if (getSpiderStatus() == SPIDER_STATUS_RUNNING) {
             throw new SpiderException(String.format("Spider %s is already running!", name));
         }
     }
 
     private void checkRunningStat() {
-
         while (true) {
-
             int statNow = getSpiderStatus();
             if (statNow == SPIDER_STATUS_RUNNING) {
                 throw new SpiderException(String.format("Spider %s is already running!", name));
             }
-
             if (stat.compareAndSet(statNow, SPIDER_STATUS_RUNNING)) {
                 break;
             }
@@ -833,7 +725,6 @@ public class Spider {
     }
 
     public void stop() {
-
         if (stat.compareAndSet(SPIDER_STATUS_RUNNING, SPIDER_STATUS_STOPPED)) { // 停止爬虫的状态
             log.info("Spider {} stop success!", name);
         }
@@ -844,7 +735,6 @@ public class Spider {
      * 爬虫需要停止时，需要使用该方法
      */
     public void forceStop() {
-
         compositeDisposable.clear();
 
         if (stat.compareAndSet(SPIDER_STATUS_RUNNING, SPIDER_STATUS_STOPPED)) { // 停止爬虫的状态
@@ -865,7 +755,6 @@ public class Spider {
      * 爬虫重新开始
      */
     public void resume() {
-
         if (stat.get() == SPIDER_STATUS_PAUSE
                 && this.pauseCountDown!=null) {
 
@@ -876,7 +765,6 @@ public class Spider {
     }
 
     private void initialDelay() {
-
         if (initialDelay > 0) {
 
             try {

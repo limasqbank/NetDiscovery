@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'java-library'
     id 'com.novoda.bintray-release'
 }
 
@@ -32,12 +33,13 @@ dependencies {
     implementation "tony-common:tony-common-utils:${libs.tony_common_utils}"
     implementation "com.safframework.rxcache:rxcache-core:${libs.rxcache}"
 
-    implementation "ch.qos.logback:logback-classic:${libs.logback}"
-    implementation "ch.qos.logback:logback-core:${libs.logback}"
-    implementation "ch.qos.logback:logback-access:${libs.logback}"
+    compile "ch.qos.logback:logback-classic:${libs.logback}"
+    compile "ch.qos.logback:logback-core:${libs.logback}"
+    compile "ch.qos.logback:logback-access:${libs.logback}"
     implementation "org.projectlombok:lombok:${libs.lombok}"
 
-    implementation 'com.google.guava:guava:23.6-jre'
+    implementation "org.apache.httpcomponents:httpclient:${libs.httpclient}"
+    implementation "com.google.guava:guava:${libs.guava}"
     implementation ("us.codecraft:xsoup:0.3.1",{
         exclude group: 'org.jsoup', module: 'jsoup'
     })
@@ -48,6 +50,10 @@ dependencies {
     implementation "com.lmax:disruptor:${libs.disruptor}"
 
     implementation "org.apache.commons:commons-lang3:${libs.commons_lang3}"
+
+    implementation 'com.github.bdqfork:festival-context:0.5.0'
+
+    implementation "com.typesafe:config:1.4.0"
 }
 
 publish{

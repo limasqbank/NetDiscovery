@@ -1,7 +1,7 @@
 package cn.netdiscovery.core.watch.zookeeper;
 
-import cn.netdiscovery.core.config.Configuration;
 import cn.netdiscovery.core.config.Constant;
+import cn.netdiscovery.core.config.SpiderEngineConfig;
 import cn.netdiscovery.core.domain.SpiderEngineState;
 import cn.netdiscovery.core.watch.AbstractWatchManager;
 import com.safframework.tony.common.utils.Preconditions;
@@ -30,7 +30,7 @@ public class ZooKeeperWatchManager extends AbstractWatchManager implements Watch
 
     public ZooKeeperWatchManager() {
 
-        this(Configuration.getConfig("spiderEngine.registry.zookeeper.zkStr"),Configuration.getConfig("spiderEngine.registry.zookeeper.zkPath"));
+        this(SpiderEngineConfig.getInstance().getZkStr(), SpiderEngineConfig.getInstance().getZkPath());
     }
 
     public ZooKeeperWatchManager(String zkStr, String zkPath) {

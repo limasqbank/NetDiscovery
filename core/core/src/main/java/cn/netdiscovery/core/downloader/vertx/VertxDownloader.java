@@ -1,16 +1,14 @@
 package cn.netdiscovery.core.downloader.vertx;
 
 import cn.netdiscovery.core.cache.RxCacheManager;
-import cn.netdiscovery.core.config.Configuration;
 import cn.netdiscovery.core.config.Constant;
+import cn.netdiscovery.core.config.SpiderConfig;
 import cn.netdiscovery.core.cookies.CookiesPool;
 import cn.netdiscovery.core.domain.Request;
 import cn.netdiscovery.core.domain.Response;
 import cn.netdiscovery.core.downloader.Downloader;
-import cn.netdiscovery.core.transformer.DownloaderDelayTransformer;
-import cn.netdiscovery.core.utils.BooleanUtils;
-import cn.netdiscovery.core.utils.NumberUtils;
-import cn.netdiscovery.core.vertx.VertxUtils;
+import cn.netdiscovery.core.rxjava.transformer.DownloaderDelayTransformer;
+import cn.netdiscovery.core.vertx.VertxManager;
 import com.safframework.rxcache.domain.Record;
 import com.safframework.tony.common.utils.Preconditions;
 import io.reactivex.Maybe;
@@ -38,17 +36,17 @@ public class VertxDownloader implements Downloader {
 
     public VertxDownloader() {
 
-        this.vertx = new io.vertx.reactivex.core.Vertx(VertxUtils.getVertx());
+        this.vertx = new io.vertx.reactivex.core.Vertx(VertxManager.getVertx());
     }
 
     public Maybe<Response> download(Request request) {
 
         // request 在 debug 模式下，并且缓存中包含了数据，则使用缓存中的数据
         if (request.isDebug()
-                && RxCacheManager.getInsatance().getRxCache()!=null
-                && RxCacheManager.getInsatance().getRxCache().get(request.getUrl(), Response.class)!=null) {
+                && RxCacheManager.getInstance().getRxCache()!=null
+                && RxCacheManager.getInstance().getRxCache().get(request.getUrl(), Response.class)!=null) {
 
-            Record<Response> response = RxCacheManager.getInsatance().getRxCache().get(request.getUrl(), Response.class);
+            Record<Response> response = RxCacheManager.getInstance().getRxCache().get(request.getUrl(), Response.class);
             return Maybe.just(response.getData());
         }
 
@@ -153,12 +151,12 @@ public class VertxDownloader implements Downloader {
     private WebClientOptions initWebClientOptions(Request request) {
 
         WebClientOptions options = new WebClientOptions();
-        options.setKeepAlive(BooleanUtils.toBoolean(Configuration.getConfig("spider.downloader.vertx.options.keepAlive",String.class),true))
-                .setReuseAddress(BooleanUtils.toBoolean(Configuration.getConfig("spider.downloader.vertx.options.reuseAddress",String.class),true))
-                .setFollowRedirects(BooleanUtils.toBoolean(Configuration.getConfig("spider.downloader.vertx.options.followRedirects",String.class),true))
-                .setConnectTimeout(NumberUtils.toInt(Configuration.getConfig("spider.downloader.vertx.options.connectTimeout",String.class),10000))
-                .setIdleTimeout(NumberUtils.toInt(Configuration.getConfig("spider.downloader.vertx.options.idleTimeout",String.class),10))
-                .setMaxWaitQueueSize(NumberUtils.toInt(Configuration.getConfig("spider.downloader.vertx.options.maxWaitQueueSize",String.class),10));
+        options.setKeepAlive(SpiderConfig.getInstance().isKeepAlive())
+                .setReuseAddress(SpiderConfig.getInstance().isReuseAddress())
+                .setFollowRedirects(SpiderConfig.getInstance().isFollowRedirects())
+                .setConnectTimeout(SpiderConfig.getInstance().getConnectTimeout())
+                .setIdleTimeout(SpiderConfig.getInstance().getIdleTimeout())
+                .setMaxWaitQueueSize(SpiderConfig.getInstance().getMaxWaitQueueSize());
 
         if (Preconditions.isNotBlank(request.getUserAgent())) {
             options.setUserAgent(request.getUserAgent());

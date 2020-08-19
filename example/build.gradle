@@ -1,8 +1,10 @@
+plugins {
+    id 'java'
+    id 'kotlin'
+}
+
 group 'com.cv4j.netdiscovery'
 version '1.0-SNAPSHOT'
-
-apply plugin: 'java'
-apply plugin: 'kotlin'
 
 sourceCompatibility = 1.8
 
@@ -14,16 +16,20 @@ repositories {
 }
 
 dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+    implementation "org.jetbrains.kotlin:kotlin-reflect"
+
     testCompile group: 'junit', name: 'junit', version: '4.12'
 
     implementation project(":core:core")
     implementation project(":core:engine")
     implementation project(":core:monitor")
+    implementation project(":downloader:okhttp")
     implementation project(":downloader:selenium")
     implementation project(":downloader:htmlunit")
     implementation project(":pipeline:couchbase")
     implementation project(":pipeline:elasticsearch")
-    implementation project(":pipeline:redis")
+    implementation project(":pipeline:pipeline-redis")
     implementation project(":pipeline:mongo")
     implementation project(":queue:redis")
     implementation project(":queue:kafka")
@@ -37,9 +43,11 @@ dependencies {
 
     implementation "io.lettuce:lettuce-core:${libs.lettuce}"
     implementation 'org.apache.kafka:kafka-clients:1.0.0'
-    implementation 'org.seleniumhq.selenium:selenium-java:3.8.1'
+    implementation "org.seleniumhq.selenium:selenium-java:${libs.selenium_java}"
+    implementation "com.google.guava:guava:${libs.guava}"
+
     implementation 'org.jsoup:jsoup:1.10.3'
-    implementation 'com.google.code.gson:gson:2.8.5'
+    implementation "com.google.code.gson:gson:${libs.gson}"
 
     implementation "ch.qos.logback:logback-classic:${libs.logback}"
     implementation "ch.qos.logback:logback-core:${libs.logback}"
@@ -51,16 +59,26 @@ dependencies {
     implementation "io.vertx:vertx-web-client:${libs.vertx}"
     implementation "io.vertx:vertx-rx-java2:${libs.vertx}"
     implementation "io.vertx:vertx-mongo-client:${libs.vertx}"
+    implementation "io.vertx:vertx-lang-kotlin-coroutines:${libs.vertx}"
 
     implementation 'org.slf4j:slf4j-api:1.7.20'
-    implementation "org.apache.httpcomponents:httpclient:4.5.2"
+    implementation "org.apache.httpcomponents:httpclient:${libs.httpclient}"
 
     implementation 'org.apache.zookeeper:zookeeper:3.4.14'
     implementation 'org.apache.curator:curator-framework:2.13.0'
 
-    implementation 'tony-common:tony-common-utils:1.2.6'
+    implementation "tony-common:tony-common-utils:${libs.tony_common_utils}"
     implementation "com.safframework.rxcache:rxcache-core:${libs.rxcache}"
     implementation "com.cv4j.proxy:proxypool:${libs.proxypool}"
 
     implementation 'com.safframework.bytekit:bytekit-core:1.2.6'
+
+    implementation "com.github.bdqfork:hamal-context:0.1.1"
+}
+
+compileKotlin {
+    kotlinOptions.jvmTarget = "1.8"
+}
+compileTestKotlin {
+    kotlinOptions.jvmTarget = "1.8"
 }
