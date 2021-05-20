@@ -42,7 +42,7 @@ public class VertxDownloader implements Downloader {
     public Maybe<Response> download(Request request) {
 
         // request 在 debug 模式下，并且缓存中包含了数据，则使用缓存中的数据
-        if (request.isDebug()
+        if (request.getDebug()
                 && RxCacheManager.getInstance().getRxCache()!=null
                 && RxCacheManager.getInstance().getRxCache().get(request.getUrl(), Response.class)!=null) {
 
@@ -133,12 +133,12 @@ public class VertxDownloader implements Downloader {
                         response.setStatusCode(stringHttpResponse.statusCode());
                         response.setContentType(stringHttpResponse.getHeader(Constant.CONTENT_TYPE));
 
-                        if (request.isSaveCookie()) {
+                        if (request.getSaveCookie()) {
                             // save cookies
                             CookiesPool.getInsatance().saveCookie(request, stringHttpResponse.cookies());
                         }
 
-                        if (request.isDebug()) { // request 在 debug 模式，则缓存response
+                        if (request.getDebug()) { // request 在 debug 模式，则缓存response
 
                             save(request.getUrl(),response);
                         }
@@ -151,12 +151,12 @@ public class VertxDownloader implements Downloader {
     private WebClientOptions initWebClientOptions(Request request) {
 
         WebClientOptions options = new WebClientOptions();
-        options.setKeepAlive(SpiderConfig.getInstance().isKeepAlive())
-                .setReuseAddress(SpiderConfig.getInstance().isReuseAddress())
-                .setFollowRedirects(SpiderConfig.getInstance().isFollowRedirects())
-                .setConnectTimeout(SpiderConfig.getInstance().getConnectTimeout())
-                .setIdleTimeout(SpiderConfig.getInstance().getIdleTimeout())
-                .setMaxWaitQueueSize(SpiderConfig.getInstance().getMaxWaitQueueSize());
+        options.setKeepAlive(SpiderConfig.INSTANCE.getKeepAlive())
+                .setReuseAddress(SpiderConfig.INSTANCE.getReuseAddress())
+                .setFollowRedirects(SpiderConfig.INSTANCE.getFollowRedirects())
+                .setConnectTimeout(SpiderConfig.INSTANCE.getConnectTimeout())
+                .setIdleTimeout(SpiderConfig.INSTANCE.getIdleTimeout())
+                .setMaxWaitQueueSize(SpiderConfig.INSTANCE.getMaxWaitQueueSize());
 
         if (Preconditions.isNotBlank(request.getUserAgent())) {
             options.setUserAgent(request.getUserAgent());

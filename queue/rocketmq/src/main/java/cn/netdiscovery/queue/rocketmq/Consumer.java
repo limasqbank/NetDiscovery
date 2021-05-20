@@ -1,8 +1,6 @@
 package cn.netdiscovery.queue.rocketmq;
 
 import com.safframework.tony.common.utils.Preconditions;
-import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
@@ -18,13 +16,10 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 /**
  * Created by tony on 2019-07-17.
  */
-@Slf4j
 public class Consumer {
 
-    @Getter
     private DefaultMQPushConsumer consumer;
 
-    @Getter
     private Map<String, ConcurrentLinkedQueue<MessageExt>> map;
 
     public Consumer(String consumerName,String nameServerAddress) {
@@ -34,7 +29,15 @@ public class Consumer {
         this.map = new ConcurrentHashMap<>();
     }
 
-    public void subscribe(String topic,String tag) {
+    public DefaultMQPushConsumer getConsumer() {
+        return consumer;
+    }
+
+    public Map<String, ConcurrentLinkedQueue<MessageExt>> getMap() {
+        return map;
+    }
+
+    public void subscribe(String topic, String tag) {
 
         try {
             consumer.subscribe(topic, tag);

@@ -15,7 +15,8 @@ import io.reactivex.MaybeEmitter;
 import io.reactivex.MaybeOnSubscribe;
 import io.reactivex.functions.Function;
 import io.vertx.core.http.HttpMethod;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -29,8 +30,9 @@ import java.util.Map;
 /**
  * Created by tony on 2018/3/2.
  */
-@Slf4j
 public class UrlConnectionDownloader implements Downloader {
+
+    private Logger log = LoggerFactory.getLogger(UrlConnectionDownloader.class);
 
     private HttpURLConnection httpUrlConnection = null;
 
@@ -38,7 +40,7 @@ public class UrlConnectionDownloader implements Downloader {
     public Maybe<Response> download(Request request) {
 
         // request 在 debug 模式下，并且缓存中包含了数据，则使用缓存中的数据
-        if (request.isDebug()
+        if (request.getDebug()
                 && RxCacheManager.getInstance().getRxCache() != null
                 && RxCacheManager.getInstance().getRxCache().get(request.getUrl(), Response.class) != null) {
 
@@ -112,7 +114,7 @@ public class UrlConnectionDownloader implements Downloader {
                     response.setStatusCode(httpUrlConnection.getResponseCode());
                     response.setContentType(httpUrlConnection.getContentType());
 
-                    if (request.isSaveCookie()) {
+                    if (request.getSaveCookie()) {
 
                         // save cookies
                         Map<String, List<String>> maps = httpUrlConnection.getHeaderFields();
@@ -120,7 +122,7 @@ public class UrlConnectionDownloader implements Downloader {
                         CookiesPool.getInsatance().saveCookie(request,cookies);
                     }
 
-                    if (request.isDebug()) { // request 在 debug 模式，则缓存response
+                    if (request.getDebug()) { // request 在 debug 模式，则缓存response
 
                         save(request.getUrl(),response);
                     }

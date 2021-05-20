@@ -52,7 +52,6 @@ dependencies {
     implementation "ch.qos.logback:logback-classic:${libs.logback}"
     implementation "ch.qos.logback:logback-core:${libs.logback}"
     implementation "ch.qos.logback:logback-access:${libs.logback}"
-    implementation "org.projectlombok:lombok:${libs.lombok}"
 
     implementation "io.vertx:vertx-core:${libs.vertx}"
     implementation "io.vertx:vertx-web:${libs.vertx}"
@@ -73,7 +72,8 @@ dependencies {
 
     implementation 'com.safframework.bytekit:bytekit-core:1.2.6'
 
-    implementation "com.github.bdqfork:hamal-context:0.1.1"
+    implementation ("com.github.bdqfork:hamal-context:0.1.1",
+            { exclude group: 'io.netty', module: 'netty-all' })
 }
 
 compileKotlin {

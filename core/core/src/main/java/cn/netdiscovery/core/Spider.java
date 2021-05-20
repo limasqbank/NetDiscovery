@@ -33,9 +33,9 @@ import io.reactivex.disposables.CompositeDisposable;
 import io.reactivex.functions.Consumer;
 import io.reactivex.functions.Function;
 import io.reactivex.schedulers.Schedulers;
-import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.RandomUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.charset.Charset;
 import java.util.Arrays;
@@ -54,8 +54,9 @@ import java.util.concurrent.locks.ReentrantLock;
  * <p>
  * Created by tony on 2017/12/22.
  */
-@Slf4j
 public class Spider {
+
+    private Logger log = LoggerFactory.getLogger(Spider.class);
 
     public final static int SPIDER_STATUS_INIT = 0;
     public final static int SPIDER_STATUS_RUNNING = 1;
@@ -65,14 +66,12 @@ public class Spider {
 
     private AtomicInteger stat = new AtomicInteger(SPIDER_STATUS_INIT);
 
-    @Getter
     private String name = "spider";// 爬虫的名字，默认使用spider
 
     private Parser parser;
 
     private List<Pipeline> pipelines = new LinkedList<>();
 
-    @Getter
     private Queue queue;
 
     private boolean autoProxy = false;
@@ -98,12 +97,10 @@ public class Spider {
     private ExecutorService pipeLineThreadPool;
 
     private CompositeDisposable compositeDisposable = new CompositeDisposable();
-
-    @Getter
     private Downloader downloader;
 
     private Spider() {
-        String queueType = SpiderConfig.getInstance().getQueueType();
+        String queueType = SpiderConfig.INSTANCE.getQueueType();
         if (Preconditions.isNotBlank(queueType)) {
             switch (queueType) {
                 case Constant.QUEUE_TYPE_DEFAULT:
@@ -138,22 +135,22 @@ public class Spider {
      * 从 application.conf 中获取配置，并依据这些配置来初始化爬虫
      */
     private void initSpiderConfig() {
-        autoProxy = SpiderConfig.getInstance().isAutoProxy();
-        initialDelay = SpiderConfig.getInstance().getInitialDelay();
-        maxRetries = SpiderConfig.getInstance().getMaxRetries();
-        retryDelayMillis = SpiderConfig.getInstance().getRetryDelayMillis();
+        autoProxy = SpiderConfig.INSTANCE.getAutoProxy();
+        initialDelay = SpiderConfig.INSTANCE.getInitialDelay();
+        maxRetries = SpiderConfig.INSTANCE.getMaxRetries();
+        retryDelayMillis = SpiderConfig.INSTANCE.getRetryDelayMillis();
 
-        requestSleepTime = SpiderConfig.getInstance().getSleepTime();
-        autoSleepTime = SpiderConfig.getInstance().isAutoSleepTime();
-        downloadDelay = SpiderConfig.getInstance().getDownloadDelay();
-        autoDownloadDelay = SpiderConfig.getInstance().isAutoDownloadDelay();
-        domainDelay = SpiderConfig.getInstance().getDomainDelay();
-        autoDomainDelay = SpiderConfig.getInstance().isAutoDomainDelay();
+        requestSleepTime = SpiderConfig.INSTANCE.getSleepTime();
+        autoSleepTime = SpiderConfig.INSTANCE.getAutoSleepTime();
+        downloadDelay = SpiderConfig.INSTANCE.getDownloadDelay();
+        autoDownloadDelay = SpiderConfig.INSTANCE.getAutoDownloadDelay();
+        domainDelay = SpiderConfig.INSTANCE.getDomainDelay();
+        autoDomainDelay = SpiderConfig.INSTANCE.getAutoDomainDelay();
 
-        pipelineDelay = SpiderConfig.getInstance().getPipelineDelay();
-        autoPipelineDelay = SpiderConfig.getInstance().isAutoPipelineDelay();
+        pipelineDelay = SpiderConfig.INSTANCE.getPipelineDelay();
+        autoPipelineDelay = SpiderConfig.INSTANCE.getAutoPipelineDelay();
 
-        String downloaderType = SpiderConfig.getInstance().getDownloaderType();
+        String downloaderType = SpiderConfig.INSTANCE.getDownloaderType();
 
         if (Preconditions.isNotBlank(downloaderType)) {
             switch (downloaderType) {
@@ -171,10 +168,10 @@ public class Spider {
             }
         }
 
-        if (SpiderConfig.getInstance().isUsePrintRequestPipeline()) {
+        if (SpiderConfig.INSTANCE.getUsePrintRequestPipeline()) {
             this.pipelines.add(new PrintRequestPipeline()); // 默认使用 PrintRequestPipeline
         }
-        if (SpiderConfig.getInstance().isUseConsolePipeline()) {
+        if (SpiderConfig.INSTANCE.getUseConsolePipeline()) {
             this.pipelines.add(new ConsolePipeline()); // 默认使用 ConsolePipeline
         }
     }
@@ -541,6 +538,18 @@ public class Spider {
         }
     }
 
+    public String getName() {
+        return name;
+    }
+
+    public Queue getQueue() {
+        return queue;
+    }
+
+    public Downloader getDownloader() {
+        return downloader;
+    }
+
     public void run() {
         checkRunningStat();
 
@@ -605,7 +614,7 @@ public class Spider {
                             public Page apply(Response response) throws Exception {
 
                                 Page page = new Page();
-                                page.setRequest(request);
+                                page.addRequest(request);
                                 page.setUrl(request.getUrl());
                                 page.setStatusCode(response.getStatusCode());
 
@@ -649,7 +658,7 @@ public class Spider {
                             @Override
                             public Page apply(Page page) throws Exception {
 
-                                if (!page.getResultItems().isSkip() && Preconditions.isNotBlank(pipelines)) {
+                                if (!page.getResultItems().getSkip() && Preconditions.isNotBlank(pipelines)) {
 
                                     pipelines.stream()
                                             .forEach(pipeline -> {

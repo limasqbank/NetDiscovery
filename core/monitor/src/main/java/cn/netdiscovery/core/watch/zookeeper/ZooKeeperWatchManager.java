@@ -1,12 +1,12 @@
 package cn.netdiscovery.core.watch.zookeeper;
 
+import cn.netdiscovery.core.Spider;
 import cn.netdiscovery.core.config.Constant;
 import cn.netdiscovery.core.config.SpiderEngineConfig;
 import cn.netdiscovery.core.domain.SpiderEngineState;
 import cn.netdiscovery.core.watch.AbstractWatchManager;
 import com.safframework.tony.common.utils.Preconditions;
 import io.vertx.core.Vertx;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
@@ -15,14 +15,17 @@ import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.data.Stat;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
 /**
  * Created by tony on 2019-05-21.
  */
-@Slf4j
 public class ZooKeeperWatchManager extends AbstractWatchManager implements Watcher {
+
+    private Logger log = LoggerFactory.getLogger(ZooKeeperWatchManager.class);
 
     private CuratorFramework client;
 
@@ -30,7 +33,7 @@ public class ZooKeeperWatchManager extends AbstractWatchManager implements Watch
 
     public ZooKeeperWatchManager() {
 
-        this(SpiderEngineConfig.getInstance().getZkStr(), SpiderEngineConfig.getInstance().getZkPath());
+        this(SpiderEngineConfig.INSTANCE.getZkStr(), SpiderEngineConfig.INSTANCE.getZkPath());
     }
 
     public ZooKeeperWatchManager(String zkStr, String zkPath) {

@@ -56,11 +56,24 @@ NetDiscovery 是基于 Vert.x、RxJava 2 等框架实现的爬虫框架。目前
 
 对于 Java 工程，如果使用 gradle 构建，由于默认没有使用 jcenter()，需要在相应 module 的 build.gradle 中配置
 
+## Gradle
+
 ```groovy
 repositories {
-    mavenCentral()
     jcenter()
 }
+```
+
+## Maven
+
+```xml
+<repositories>
+    <repository>
+        <id>central</id>
+        <name>bintray</name>
+        <url>https://jcenter.bintray.com</url>
+    </repository>
+</repositories>
 ```
 
 在 NetDiscovery 中，Spider 可以单独运行，Spider 也可以交给 SpiderEngine 来控制。
@@ -94,7 +107,7 @@ SpiderEngine 可以在运行之前注册到 Etcd/Zookeeper，然后由 monitor �
 
 # TODO List:
 
-* 移除项目对 lombok 的依赖
+* Kotlin 版本增加 Kotlin-Cli
 * 整合 OpenCV 以及 Tesseract，实现 OCR 识别的功能
 * 增加 admin 模块
 * 支持 Consul
@@ -102,6 +115,8 @@ SpiderEngine 可以在运行之前注册到 Etcd/Zookeeper，然后由 monitor �
 * 增加 chromium 的支持
 * 完善 wiki，增加各个模式的使用说明
 * 支持 RxJava 3.x 
+* 支持 Java 11
+* 支持 docker
 
 
 # Contributors:

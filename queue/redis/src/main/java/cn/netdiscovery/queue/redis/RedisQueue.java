@@ -61,7 +61,7 @@ public class RedisQueue extends AbstractQueue implements DuplicateFilter {
         RedisCommands<String, String> commands = connection.sync();
 
         try {
-            if (request.isCheckDuplicate()) {
+            if (request.getCheckDuplicate()) {
                 return commands.sadd(getSetKey(request), request.getUrl()) == 0;
             } else {
                 commands.sadd(getSetKey(request), request.getUrl());
